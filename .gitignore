@@ -1,0 +1,13 @@
+.env
+go.mod
+go.sum
+vendor/
+*.log
+*.tmp
+.DS_Store
+.idea/
+.vscode/
+*.exe
+*.out
+*.dll
+_data/
