@@ -70,44 +70,52 @@ type QuestionWithChoices struct {
 	CorrectCSV string // correct choice ids joined by comma
 }
 
+// internal/modules/assessment/repo/gorm_repo.go (หรือไฟล์ repo ที่คุณวาง AttemptRepo ไว้)
+
 func (r *AttemptRepo) ListQuestionsWithCorrectChoices(assessmentID string) ([]QuestionWithChoices, error) {
-	type row struct {
-		QID    string
-		Type   string
-		Points int
-		CID    string
-		OK     bool
+	// 1) ดึงคำถามของ assessment นี้
+	var qs []models.Question
+	if err := r.db.
+		Where("assessment_id = ?", assessmentID).
+		Order("seq ASC").
+		Find(&qs).Error; err != nil {
+		return nil, err
 	}
-	var rows []row
-	err := r.db.Table("assessment_questions q").
-		Select("q.id as qid, q.type, q.points, c.id as cid, c.is_correct as ok").
-		Joins("LEFT JOIN assessment_choices c ON c.question_id = q.id").
-		Where("q.assessment_id = ?", assessmentID).
-		Order("q.seq ASC, c.seq ASC").
-		Scan(&rows).Error
-	if err != nil {
+	if len(qs) == 0 {
+		return nil, nil
+	}
+
+	// 2) รวบรวม question_ids
+	qIDs := make([]string, 0, len(qs))
+	for _, q := range qs {
+		qIDs = append(qIDs, q.ID)
+	}
+
+	// 3) ดึง choices ที่ถูกต้องของชุดคำถามนี้
+	var cs []models.Choice
+	if err := r.db.
+		Where("question_id IN ? AND is_correct = ?", qIDs, true).
+		Order("seq ASC").
+		Find(&cs).Error; err != nil {
 		return nil, err
 	}
 
-	// Aggregate correct choices per question
-	m := map[string]QuestionWithChoices{}
-	for _, r := range rows {
-		x, ok := m[r.QID]
-		if !ok {
-			x = QuestionWithChoices{QID: r.QID, Type: r.Type, Points: r.Points}
-		}
-		if r.OK {
-			if x.CorrectCSV == "" {
-				x.CorrectCSV = r.CID
-			} else {
-				x.CorrectCSV += "," + r.CID
-			}
-		}
-		m[r.QID] = x
+	// 4) map choices ต่อคำถาม
+	byQ := make(map[string][]string, len(qs))
+	for _, c := range cs {
+		byQ[c.QuestionID] = append(byQ[c.QuestionID], c.ID)
 	}
-	out := make([]QuestionWithChoices, 0, len(m))
-	for _, v := range m {
-		out = append(out, v)
+
+	// 5) ประกอบผลลัพธ์ที่ service ต้องใช้
+	out := make([]QuestionWithChoices, 0, len(qs))
+	for _, q := range qs {
+		corr := NormalizeCSV(byQ[q.ID]) // join ด้วย comma (หรือจะเก็บ []string ก็ได้)
+		out = append(out, QuestionWithChoices{
+			QID:        q.ID,
+			Type:       q.Type,
+			Points:     q.Points,
+			CorrectCSV: corr,
+		})
 	}
 	return out, nil
 }

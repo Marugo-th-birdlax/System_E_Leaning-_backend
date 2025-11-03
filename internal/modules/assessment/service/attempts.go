@@ -147,22 +147,17 @@ func (s *attemptSvc) SubmitAttempt(userID, attemptID string, _ dto.SubmitAttempt
 
 		switch q.Type {
 		case "single_choice", "true_false":
-			// must be exactly one and match
 			if ans.SelectedChoiceIDs == nil {
 				isCorrect = false
 			} else {
-				// correct CSV must equal selected
-				sel := *ans.SelectedChoiceIDs
-				// normalize 1 value
-				if strings.Contains(sel, ",") {
-					// ผู้เรียนเลือกหลายอันใน single -> ถือว่าผิด
-					isCorrect = false
-				} else {
-					isCorrect = sel == q.CorrectCSV
-				}
+				// ใช้ compare แบบ set แทน ==
+				aSet := assrepo.SplitCSV(*ans.SelectedChoiceIDs)
+				cSet := assrepo.SplitCSV(q.CorrectCSV)
+				sort.Strings(aSet)
+				sort.Strings(cSet)
+				isCorrect = strings.Join(aSet, ",") == strings.Join(cSet, ",")
 			}
 		case "multiple_choice":
-			// ต้องตรงชุด (เทียบหลัง sort)
 			if ans.SelectedChoiceIDs == nil {
 				isCorrect = false
 			} else {
@@ -172,6 +167,7 @@ func (s *attemptSvc) SubmitAttempt(userID, attemptID string, _ dto.SubmitAttempt
 				sort.Strings(cSet)
 				isCorrect = strings.Join(aSet, ",") == strings.Join(cSet, ",")
 			}
+
 		case "short_text":
 			// ยังไม่ auto-grade
 			isCorrect = false

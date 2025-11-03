@@ -43,3 +43,15 @@ type UpdateQuestionReq struct {
 	Seq    *int    `json:"seq"`
 	// ถ้าอยากแก้ type ของคำถาม ให้เพิ่ม: Type *string `json:"type"`
 }
+
+type ChoiceUpsert struct {
+	ID        *string `json:"id,omitempty"` // เวลาทำ replace-all: ใส่ ID ถ้าต้องแก้ของเดิม
+	Label     string  `json:"label" validate:"required"`
+	IsCorrect bool    `json:"is_correct"`
+	Seq       int     `json:"seq"`
+}
+
+// Replace ทั้งชุดของ question (ถ้าไม่มี ID จะสร้างใหม่, ถ้ามี ID แล้วไม่ถูกส่งมา ถือว่า “ลบทิ้ง”)
+type ReplaceChoicesReq struct {
+	Choices []ChoiceUpsert `json:"choices" validate:"required"`
+}

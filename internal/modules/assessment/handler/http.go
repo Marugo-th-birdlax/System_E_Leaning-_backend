@@ -80,7 +80,7 @@ func (h *Handler) ListAssessments(c *fiber.Ctx) error {
 
 func (h *Handler) GetAssessment(c *fiber.Ctx) error {
 	id := c.Params("id")
-	res, err := h.svc.GetDetail(id)
+	res, err := h.svc.GetDetail(id) // ต้องเรียกตัวที่ map choices แล้ว
 	if err != nil {
 		return fiber.NewError(fiber.StatusNotFound, "assessment not found")
 	}
@@ -179,6 +179,57 @@ func (h *Handler) UpdateQuestion(c *fiber.Ctx) error {
 func (h *Handler) DeleteQuestion(c *fiber.Ctx) error {
 	qid := c.Params("qid")
 	if err := h.svc.DeleteQuestion(qid); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// PUT /v1/assessments/:aid/questions/:qid/choices  (replace-all)
+func (h *Handler) ReplaceChoices(c *fiber.Ctx) error {
+	qid := c.Params("qid")
+	var req dto.ReplaceChoicesReq
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	}
+	rows, err := h.svc.ReplaceChoices(qid, req)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	return c.JSON(fiber.Map{"choices": rows})
+}
+
+// POST /v1/assessments/:aid/questions/:qid/choices  (add single)
+func (h *Handler) AddChoice(c *fiber.Ctx) error {
+	qid := c.Params("qid")
+	var in dto.ChoiceUpsert
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	}
+	row, err := h.svc.AddChoice(qid, in)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	return c.Status(fiber.StatusCreated).JSON(row)
+}
+
+// PUT /v1/assessments/:aid/questions/:qid/choices/:cid  (update single)
+func (h *Handler) UpdateChoice(c *fiber.Ctx) error {
+	cid := c.Params("cid")
+	var in dto.ChoiceUpsert
+	if err := c.BodyParser(&in); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	}
+	row, err := h.svc.UpdateChoice(cid, in)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	return c.JSON(row)
+}
+
+// DELETE /v1/assessments/:aid/questions/:qid/choices/:cid
+func (h *Handler) DeleteChoice(c *fiber.Ctx) error {
+	cid := c.Params("cid")
+	if err := h.svc.DeleteChoice(cid); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	return c.SendStatus(fiber.StatusNoContent)

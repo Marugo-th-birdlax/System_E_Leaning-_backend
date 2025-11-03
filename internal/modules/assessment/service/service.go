@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/Marugo/birdlax/internal/modules/assessment/dto"
@@ -70,22 +71,30 @@ func (s *svc) GetDetail(id string) (*dto.AssessmentDetailResp, error) {
 		return nil, err
 	}
 
-	item := dto.AssessmentItem{
+	ad := dto.AssessmentItem{
 		ID: a.ID, OwnerType: a.OwnerType, OwnerID: a.OwnerID, Type: a.Type,
 		Title: a.Title, PassScore: a.PassScore, TimeLimitS: a.TimeLimitS, MaxAttempts: a.MaxAttempts,
 	}
-	qres := make([]dto.QuestionResp, 0, len(qs))
+
+	outQ := make([]dto.QuestionResp, 0, len(qs))
 	for _, q := range qs {
-		qr := dto.QuestionResp{
+		qRes := dto.QuestionResp{
 			ID: q.ID, Type: q.Type, Stem: strings.TrimSpace(q.Stem), Points: q.Points, Seq: q.Seq,
+			// ถ้าต้องการโชว์ assessment_id ด้วย (ตาม output เดิม)
+			AssessmentID: q.AssessmentID,
 		}
-		if cs, ok := csByQ[q.ID]; ok && len(cs) > 0 {
-			// dto.QuestionResp does not have a Choices field, so skip populating choices here.
-			_ = cs
+		if cs := csByQ[q.ID]; len(cs) > 0 {
+			choices := make([]dto.ChoiceResp, 0, len(cs))
+			for _, c := range cs {
+				choices = append(choices, dto.ChoiceResp{
+					ID: c.ID, Label: strings.TrimSpace(c.Label), IsCorrect: c.IsCorrect, Seq: c.Seq,
+				})
+			}
+			qRes.Choices = choices
 		}
-		qres = append(qres, qr)
+		outQ = append(outQ, qRes)
 	}
-	return &dto.AssessmentDetailResp{Assessment: item, Questions: qres}, nil
+	return &dto.AssessmentDetailResp{Assessment: ad, Questions: outQ}, nil
 }
 
 func (s *svc) UpdateAssessment(id string, req dto.UpdateAssessmentReq) (*models.Assessment, error) {
@@ -145,4 +154,75 @@ func (s *svc) UpdateQuestion(id string, req dto.UpdateQuestionReq) (*models.Ques
 
 func (s *svc) DeleteQuestion(id string) error {
 	return s.repo.DeleteQuestion(id)
+}
+
+func (s *svc) ReplaceChoices(questionID string, req dto.ReplaceChoicesReq) ([]dto.ChoiceResp, error) {
+	// ensure question exists และ belong-check
+	if _, err := s.repo.GetQuestionByID(questionID); err != nil {
+		return nil, errors.New("question not found")
+	}
+	// map dto -> model
+	items := make([]models.Choice, 0, len(req.Choices))
+	for _, c := range req.Choices {
+		id := ""
+		if c.ID != nil {
+			id = *c.ID
+		}
+		items = append(items, models.Choice{
+			ID:         id,
+			QuestionID: questionID,
+			Label:      c.Label,
+			IsCorrect:  c.IsCorrect,
+			Seq:        c.Seq,
+		})
+	}
+	if err := s.repo.ReplaceChoices(questionID, items); err != nil {
+		return nil, err
+	}
+	// return รายการล่าสุด
+	rows, err := s.repo.ListChoicesByQuestion(questionID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]dto.ChoiceResp, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, dto.ChoiceResp{ID: r.ID, Label: r.Label, IsCorrect: r.IsCorrect, Seq: r.Seq})
+	}
+	return out, nil
+}
+
+func (s *svc) AddChoice(questionID string, in dto.ChoiceUpsert) (*dto.ChoiceResp, error) {
+	if _, err := s.repo.GetQuestionByID(questionID); err != nil {
+		return nil, errors.New("question not found")
+	}
+	m := models.Choice{
+		ID:         uuid.NewString(),
+		QuestionID: questionID,
+		Label:      in.Label,
+		IsCorrect:  in.IsCorrect,
+		Seq:        in.Seq,
+	}
+	if err := s.repo.CreateChoice(&m); err != nil {
+		return nil, err
+	}
+	return &dto.ChoiceResp{ID: m.ID, Label: m.Label, IsCorrect: m.IsCorrect, Seq: m.Seq}, nil
+}
+
+func (s *svc) UpdateChoice(choiceID string, in dto.ChoiceUpsert) (*dto.ChoiceResp, error) {
+	// โหลดของเดิมก่อนเพื่อ ensure มีอยู่
+	// สามารถเพิ่ม repo.GetChoiceByID ถ้าต้องการเข้มงวด
+	m := models.Choice{
+		ID:        choiceID,
+		Label:     in.Label,
+		IsCorrect: in.IsCorrect,
+		Seq:       in.Seq,
+	}
+	if err := s.repo.UpdateChoice(&m); err != nil {
+		return nil, err
+	}
+	return &dto.ChoiceResp{ID: m.ID, Label: m.Label, IsCorrect: m.IsCorrect, Seq: m.Seq}, nil
+}
+
+func (s *svc) DeleteChoice(choiceID string) error {
+	return s.repo.DeleteChoice(choiceID)
 }

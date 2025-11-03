@@ -22,6 +22,12 @@ type Repo interface {
 	DeleteQuestion(id string) error
 	GetQuestionByID(id string) (*models.Question, error)
 	GetAssessmentByID(id string) (*models.Assessment, error)
+
+	ListChoicesByQuestion(qid string) ([]models.Choice, error)
+	CreateChoice(c *models.Choice) error
+	UpdateChoice(c *models.Choice) error
+	DeleteChoice(id string) error
+	ReplaceChoices(questionID string, items []models.Choice) error
 }
 
 // Service คือ business use cases
@@ -36,6 +42,11 @@ type Service interface {
 
 	UpdateQuestion(id string, req dto.UpdateQuestionReq) (*models.Question, error)
 	DeleteQuestion(id string) error
+
+	ReplaceChoices(questionID string, req dto.ReplaceChoicesReq) ([]dto.ChoiceResp, error)
+	AddChoice(questionID string, in dto.ChoiceUpsert) (*dto.ChoiceResp, error)
+	UpdateChoice(choiceID string, in dto.ChoiceUpsert) (*dto.ChoiceResp, error)
+	DeleteChoice(choiceID string) error
 }
 
 type AttemptRepo interface {

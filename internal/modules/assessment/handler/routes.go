@@ -13,6 +13,10 @@ func Register(r fiber.Router, h *Handler) {
 	g.Put("/:id", h.UpdateAssessment)
 	g.Delete("/:id/questions/:qid", h.DeleteQuestion)
 
+	g.Put("/:id/questions/:qid/choices", h.ReplaceChoices)    // replace-all
+	g.Post("/:id/questions/:qid/choices", h.AddChoice)        // add one
+	g.Put("/:id/questions/:qid/choices/:cid", h.UpdateChoice) // update one
+	g.Delete("/:id/questions/:qid/choices/:cid", h.DeleteChoice)
 }
 
 // NEW: register attempts

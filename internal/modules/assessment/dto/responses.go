@@ -32,12 +32,13 @@ type AssessmentItem struct {
 
 // สำหรับตอบกลับหลังเพิ่มคำถาม
 type QuestionResp struct {
-	ID           string `json:"id"`
-	AssessmentID string `json:"assessment_id"`
-	Type         string `json:"type"` // single_choice|multiple_choice|true_false|short_text
-	Stem         string `json:"stem"`
-	Points       int    `json:"points"`
-	Seq          int    `json:"seq"`
+	ID           string       `json:"id"`
+	AssessmentID string       `json:"assessment_id,omitempty"` // <- เพิ่มบรรทัดนี้ถ้าต้องการ
+	Type         string       `json:"type"`
+	Stem         string       `json:"stem"`
+	Points       int          `json:"points"`
+	Seq          int          `json:"seq"`
+	Choices      []ChoiceResp `json:"choices,omitempty"`
 }
 
 type PagedAssessments struct {
