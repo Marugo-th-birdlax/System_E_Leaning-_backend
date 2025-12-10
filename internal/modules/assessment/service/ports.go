@@ -1,3 +1,4 @@
+// internal\modules\assessment\service\ports.go
 package service
 
 import (
@@ -6,6 +7,7 @@ import (
 	"github.com/Marugo/birdlax/internal/modules/assessment/dto"
 	"github.com/Marugo/birdlax/internal/modules/assessment/models"
 	assrepo "github.com/Marugo/birdlax/internal/modules/assessment/repo"
+	learnmodels "github.com/Marugo/birdlax/internal/modules/learning/models"
 )
 
 // Repo คือพอร์ตฝั่ง persistence (GORM)
@@ -62,7 +64,7 @@ type AttemptRepo interface {
 	Now() (t time.Time)
 }
 
-type AssessmentRepo interface {
-	// ใช้จาก repo เดิมของคุณ
-	GetAssessmentByID(id string) (*models.Assessment, error)
+type EnrollmentRepo interface {
+	GetEnrollment(userID, courseID string) (*learnmodels.Enrollment, error)
+	UpsertEnrollment(e *learnmodels.Enrollment) error
 }

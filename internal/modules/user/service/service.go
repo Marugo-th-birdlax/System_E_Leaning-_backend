@@ -20,38 +20,6 @@ type svc struct{ repo user.Repository }
 
 func NewService(r user.Repository) user.Service { return &svc{repo: r} }
 
-// helper
-func normalizeRole(s string) usermodels.Role {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "admin":
-		return usermodels.RoleAdmin
-	case "planning":
-		return usermodels.RolePlanning
-	case "production_control":
-		return usermodels.RolePordcutionControl
-	case "production":
-		return usermodels.RoleProduction
-	case "outsourcing":
-		return usermodels.RoleOutsourcing
-	case "production_adh":
-		return usermodels.RoleProductionADH
-	case "production_weld":
-		return usermodels.RoleProductionWeld
-	case "production_assy":
-		return usermodels.RoleProductionAssy
-	default:
-		return usermodels.RoleUser
-	}
-}
-func isValidRole(r usermodels.Role) bool {
-	for _, v := range usermodels.AllRoles() {
-		if r == v {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *svc) List(ctx context.Context, page, perPage int, q string) ([]usermodels.User, int64, error) {
 	if perPage <= 0 || perPage > 200 {
 		perPage = 20
@@ -78,8 +46,8 @@ func (s *svc) Create(ctx context.Context,
 		return nil, errors.New("employee_code, email, first_name, last_name are required")
 	}
 
-	r := normalizeRole(role)
-	if !isValidRole(r) {
+	r, ok := usermodels.ParseRole(role)
+	if !ok {
 		return nil, errors.New("invalid role")
 	}
 	if strings.TrimSpace(passwordPlain) == "" {
@@ -156,12 +124,13 @@ func (s *svc) Update(ctx context.Context,
 		u.LastName = ln
 	}
 	if role != nil {
-		r := normalizeRole(*role)
-		if !isValidRole(r) {
+		if r, ok := usermodels.ParseRole(*role); ok {
+			u.Role = r
+		} else {
 			return nil, errors.New("invalid role")
 		}
-		u.Role = r
 	}
+
 	if passwordPlain != nil {
 		p := strings.TrimSpace(*passwordPlain)
 		if p == "" {
@@ -194,3 +163,108 @@ func (s *svc) Update(ctx context.Context,
 }
 
 func (s *svc) Delete(ctx context.Context, id string) error { return s.repo.Delete(ctx, id) }
+
+func (s *svc) ListDepartments(ctx context.Context, q string) ([]usermodels.Department, error) {
+	return s.repo.ListDepartments(ctx, q)
+}
+
+func (s *svc) GetDepartment(ctx context.Context, id string) (*usermodels.Department, error) {
+	return s.repo.GetDepartmentByID(ctx, id)
+}
+
+func (s *svc) CreateDepartment(ctx context.Context, code, name string, isActive *bool) (*usermodels.Department, error) {
+	code = strings.TrimSpace(code)
+	name = strings.TrimSpace(name)
+	if code == "" || name == "" {
+		return nil, errors.New("code and name are required")
+	}
+	d := &usermodels.Department{
+		Code:     code,
+		Name:     name,
+		IsActive: true,
+	}
+	if isActive != nil {
+		d.IsActive = *isActive
+	}
+	if err := s.repo.CreateDepartment(ctx, d); err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+func (s *svc) UpdateDepartment(ctx context.Context, id string, code, name *string, isActive *bool) (*usermodels.Department, error) {
+	d, err := s.repo.GetDepartmentByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if code != nil {
+		c := strings.TrimSpace(*code)
+		if c == "" {
+			return nil, errors.New("code cannot be empty")
+		}
+		d.Code = c
+	}
+	if name != nil {
+		n := strings.TrimSpace(*name)
+		if n == "" {
+			return nil, errors.New("name cannot be empty")
+		}
+		d.Name = n
+	}
+	if isActive != nil {
+		d.IsActive = *isActive
+	}
+	if err := s.repo.UpdateDepartment(ctx, d); err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+func (s *svc) DeleteDepartment(ctx context.Context, id string) error {
+	return s.repo.DeleteDepartment(ctx, id)
+}
+
+// ===== User Department Roles =====
+
+func (s *svc) ListUserDepartmentRoles(ctx context.Context, userID string) ([]usermodels.UserDepartmentRole, error) {
+	// optional: validate user exists
+	if _, err := s.repo.FindByID(ctx, userID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListUserDepartmentRoles(ctx, userID)
+}
+
+func (s *svc) AddUserDepartmentRole(ctx context.Context, userID, departmentID, role string) (*usermodels.UserDepartmentRole, error) {
+	// validate user / dept
+	if _, err := s.repo.FindByID(ctx, userID); err != nil {
+		return nil, err
+	}
+	if _, err := s.repo.GetDepartmentByID(ctx, departmentID); err != nil {
+		return nil, err
+	}
+	r, ok := usermodels.ParseDepartmentRole(role)
+	if !ok {
+		return nil, errors.New("invalid department role")
+	}
+	rel := &usermodels.UserDepartmentRole{
+		UserID:       userID,
+		DepartmentID: departmentID,
+		Role:         r,
+	}
+	if err := s.repo.AddUserDepartmentRole(ctx, rel); err != nil {
+		return nil, err
+	}
+	return rel, nil
+}
+
+func (s *svc) DeleteUserDepartmentRole(ctx context.Context, relID string) error {
+	return s.repo.DeleteUserDepartmentRole(ctx, relID)
+}
+
+func (s *svc) ListDepartmentManagers(ctx context.Context, departmentID string) ([]usermodels.UserDepartmentRole, error) {
+	// optional: validate department exists
+	if _, err := s.repo.GetDepartmentByID(ctx, departmentID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListDepartmentManagers(ctx, departmentID)
+}

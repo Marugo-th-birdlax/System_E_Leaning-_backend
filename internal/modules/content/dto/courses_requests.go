@@ -1,18 +1,22 @@
 package dto
 
 type CreateCourseReq struct {
-	Code             string  `json:"code" validate:"required"`
-	Title            string  `json:"title" validate:"required"`
-	Description      *string `json:"description"`
-	IsActive         *bool   `json:"is_active"`
-	EstimatedMinutes *int    `json:"estimated_minutes"`
+	Code             string   `json:"code" validate:"required"`
+	Title            string   `json:"title" validate:"required"`
+	Description      *string  `json:"description"`
+	IsActive         *bool    `json:"is_active"`
+	EstimatedMinutes *int     `json:"estimated_minutes"`
+	CategoryID       *string  `json:"category_id"`
+	DepartmentIDs    []string `json:"department_ids"`
 }
 
 type UpdateCourseReq struct {
-	Title            *string `json:"title"`
-	Description      *string `json:"description"`
-	IsActive         *bool   `json:"is_active"`
-	EstimatedMinutes *int    `json:"estimated_minutes"`
+	Title            *string   `json:"title"`
+	Description      *string   `json:"description"`
+	IsActive         *bool     `json:"is_active"`
+	EstimatedMinutes *int      `json:"estimated_minutes"`
+	CategoryID       *string   `json:"category_id"`
+	DepartmentIDs    *[]string `json:"department_ids"`
 }
 
 type CreateModuleReq struct {

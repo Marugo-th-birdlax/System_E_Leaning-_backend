@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"errors"
 	"strings"
 
 	"gorm.io/gorm"
@@ -75,4 +76,37 @@ func (r *ModuleRepo) ListByCourse(courseID string) ([]models.CourseModule, error
 	var rows []models.CourseModule
 	err := r.db.Where("course_id=?", courseID).Order("seq ASC").Find(&rows).Error
 	return rows, err
+}
+
+func (r *CourseRepo) ListByCategory(categoryID, q string, page, per int) ([]models.Course, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if per <= 0 || per > 100 {
+		per = 20
+	}
+	tx := r.db.Model(&models.Course{}).Where("category_id = ?", categoryID)
+	if s := strings.TrimSpace(q); s != "" {
+		tx = tx.Where("code LIKE ? OR title LIKE ?", "%"+s+"%", "%"+s+"%")
+	}
+	var total int64
+	if err := tx.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows []models.Course
+	if err := tx.Order("created_at DESC").Limit(per).Offset((page - 1) * per).Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+func (r *CourseRepo) CategoryExists(id string) (bool, error) {
+	if strings.TrimSpace(id) == "" {
+		return false, errors.New("empty category id")
+	}
+	var n int64
+	if err := r.db.Model(&models.Category{}).Where("id = ?", id).Count(&n).Error; err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }

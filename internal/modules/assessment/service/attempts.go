@@ -8,7 +8,10 @@ import (
 	"github.com/Marugo/birdlax/internal/modules/assessment/dto"
 	"github.com/Marugo/birdlax/internal/modules/assessment/models"
 	assrepo "github.com/Marugo/birdlax/internal/modules/assessment/repo"
+	learnmodels "github.com/Marugo/birdlax/internal/modules/learning/models"
+	learningservice "github.com/Marugo/birdlax/internal/modules/learning/service"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type AttemptService interface {
@@ -19,16 +22,18 @@ type AttemptService interface {
 }
 
 type attemptSvc struct {
-	ar AssessmentRepo
-	rr AttemptRepo
+	repo Repo        // 👈 ใช้ Repo จาก ports.go
+	rr   AttemptRepo // attempt repo
+	er   EnrollmentRepo
+	ms   learningservice.MetricsService
 }
 
-func NewAttemptService(ar AssessmentRepo, rr AttemptRepo) AttemptService {
-	return &attemptSvc{ar: ar, rr: rr}
+func NewAttemptService(repo Repo, rr AttemptRepo, er EnrollmentRepo, ms learningservice.MetricsService) AttemptService {
+	return &attemptSvc{repo: repo, rr: rr, er: er, ms: ms}
 }
 
 func (s *attemptSvc) StartAttempt(userID, assessmentID string, _ dto.StartAttemptReq) (*models.Attempt, error) {
-	a, err := s.ar.GetAssessmentByID(assessmentID)
+	a, err := s.repo.GetAssessmentByID(assessmentID)
 	if err != nil {
 		return nil, errors.New("assessment not found")
 	}
@@ -187,7 +192,7 @@ func (s *attemptSvc) SubmitAttempt(userID, attemptID string, _ dto.SubmitAttempt
 	}
 
 	// percent & pass/fail
-	ass, err := s.ar.GetAssessmentByID(at.AssessmentID)
+	ass, err := s.repo.GetAssessmentByID(at.AssessmentID)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -213,5 +218,83 @@ func (s *attemptSvc) SubmitAttempt(userID, attemptID string, _ dto.SubmitAttempt
 		return nil, 0, 0, err
 	}
 
+	// 🔗 ผูกผล post-test → enrollment
+	_ = s.updateEnrollmentFromAttempt(userID, ass, at)
+
+	var elapsedSec int64 = 0
+	if !at.StartedAt.IsZero() && at.SubmittedAt != nil {
+		elapsedSec = int64(at.SubmittedAt.Sub(at.StartedAt).Seconds())
+	}
+
+	// Use the assessment we already loaded above (ass)
+	if ass != nil && ass.OwnerType == "course" {
+		courseID := ass.OwnerID
+		// call metrics svc async-safe (we ignore error but could log)
+		if s.ms != nil {
+			_ = s.ms.OnSubmitAttempt(at.UserID, courseID, percent, pass, elapsedSec)
+		}
+	}
 	return at, totalQ, correctCnt, nil
+
+}
+
+func (s *attemptSvc) updateEnrollmentFromAttempt(userID string, ass *models.Assessment, at *models.Attempt) error {
+	// สนใจเฉพาะ post-test ที่ผูกกับ "course"
+	if ass == nil || ass.OwnerType != "course" || ass.Type != "post" {
+		return nil
+	}
+	if s.er == nil || at == nil || at.IsPassed == nil {
+		return nil
+	}
+
+	// หา enrollment ถ้าไม่มีก็ไม่สร้างให้ (ตาม requirement)
+	e, err := s.er.GetEnrollment(userID, ass.OwnerID)
+	if err != nil {
+		// ถ้าเป็น not found -> ไม่ต้องทำอะไร
+		// แต่ถ้าเป็น error จริง ควรคืน error เพื่อให้ caller เห็น
+		if err == gorm.ErrRecordNotFound { // ถ้าใช้ gorm
+			return nil
+		}
+		return err
+	}
+
+	now := s.rr.Now()
+
+	// update basic timestamps
+	e.LastAccessedAt = &now
+	if e.StartedAt == nil {
+		e.StartedAt = &now
+	}
+
+	// ถ้าผ่าน post-test -> ให้ถือว่า complete / passed
+	if *at.IsPassed {
+		e.Status = learnmodels.StatusPassed
+		if e.CompletedAt == nil {
+			e.CompletedAt = &now
+		}
+		// set progress 100% เป็น conservative update
+		if e.ProgressPercent < 100 {
+			e.ProgressPercent = 100
+		}
+	} else {
+		// ไม่ผ่าน -> mark failed (แต่ไม่ลด progress)
+		e.Status = learnmodels.StatusFailed
+	}
+
+	// persist and return error if any
+	if err := s.er.UpsertEnrollment(e); err != nil {
+		return err
+	}
+
+	// ถ้ามี metrics service ให้เรียกเพื่ออัปเดต (ไม่ทำให้ flow fail ถ้า metrics ล้ม)
+	if s.ms != nil && *at.IsPassed {
+		// ระยะเวลา: ถ้า available ใช้ submitted-started, ถ้าไม่มีก็ส่ง 0
+		var elapsed int64 = 0
+		if !at.StartedAt.IsZero() && at.SubmittedAt != nil {
+			elapsed = int64(at.SubmittedAt.Sub(at.StartedAt).Seconds())
+		}
+		_ = s.ms.OnCourseCompleted(userID, ass.OwnerID, elapsed) // ignore error, log ถ้าต้องการ
+	}
+
+	return nil
 }

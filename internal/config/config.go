@@ -49,6 +49,12 @@ func Init() error {
 		&contentmodels.CourseModule{},
 		&assessmentmodels.Attempt{},
 		&assessmentmodels.Answer{},
+		&contentmodels.Category{},
+		&usermodels.Department{},
+		&usermodels.UserDepartmentRole{},
+		&contentmodels.CourseDepartmentTarget{},
+		&learningmodels.LearningMetric{},
+		&learningmodels.CourseOutcome{},
 	); err != nil {
 		return fmt.Errorf("auto-migrate: %w", err)
 	}

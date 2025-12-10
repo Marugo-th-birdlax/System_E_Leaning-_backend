@@ -77,3 +77,41 @@ func (s *svc) ListLessons(moduleID string, page, per int) ([]models.Lesson, int6
 func (s *svc) GetAsset(id string) (*models.Asset, error) {
 	return s.assetRepo.GetByID(id)
 }
+
+func (s *svc) UpdateLesson(id string, req dto.UpdateLessonReq) (*models.Lesson, error) {
+	l, err := s.lessonRepo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.Title != nil {
+		l.Title = *req.Title
+	}
+	if req.ContentType != nil {
+		l.ContentType = *req.ContentType
+	}
+	if req.Seq != nil {
+		l.Seq = *req.Seq
+	}
+	if req.AssetID != nil {
+		l.AssetID = req.AssetID // ถ้า field ใน model เป็น *string
+	}
+	if req.AssessmentID != nil {
+		l.AssessmentID = req.AssessmentID // ถ้าเป็น *string
+	}
+	if req.DurationS != nil {
+		l.DurationS = req.DurationS
+	}
+	if req.IsMandatory != nil {
+		l.IsMandatory = *req.IsMandatory
+	}
+
+	if err := s.lessonRepo.UpdateLesson(l); err != nil {
+		return nil, err
+	}
+	return l, nil
+}
+
+func (s *svc) DeleteLesson(id string) error {
+	return s.lessonRepo.DeleteLesson(id)
+}

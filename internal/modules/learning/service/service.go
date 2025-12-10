@@ -9,9 +9,12 @@ import (
 	"github.com/google/uuid"
 )
 
-type svc struct{ repo Repo }
+type svc struct {
+	repo    Repo
+	metrics MetricsService
+}
 
-func New(r Repo) Service { return &svc{repo: r} }
+func New(r Repo, ms MetricsService) Service { return &svc{repo: r, metrics: ms} }
 
 func (s *svc) EnrollCourse(userID, courseID string) (*models.Enrollment, error) {
 	now := time.Now()
@@ -19,10 +22,11 @@ func (s *svc) EnrollCourse(userID, courseID string) (*models.Enrollment, error) 
 		ID:             uuid.NewString(),
 		UserID:         userID,
 		CourseID:       courseID,
-		Status:         "in_progress",
+		Status:         models.StatusInProgress,
 		StartedAt:      &now,
 		LastAccessedAt: &now,
 	}
+
 	return e, s.repo.UpsertEnrollment(e)
 }
 
@@ -127,13 +131,9 @@ func (s *svc) CompleteLesson(userID, lessonID string, _ dto.CompleteLessonReq) (
 		return nil, err
 	}
 
-	// อัปเดต % ของคอร์สใน enrollment
-	lesson, _ := s.repo.GetLesson(lessonID)
-	if lesson != nil {
-		// ต้องหา course_id จาก module (JOIN ใน repo)
-		total, _ := s.repo.CountMandatoryLessonsOfCourse("") // จะเติมใน handler จาก course_id
-		_ = total                                            // คำนวณใน handler จะสะดวกกว่าที่นี่
-	}
+	// note: handler already calls UpdateEnrollmentPercent afterwards in your code.
+	// alternative: you could call UpdateEnrollmentPercent here if you have courseID available.
+
 	return p, nil
 }
 
@@ -158,9 +158,25 @@ func (s *svc) UpdateEnrollmentPercent(userID, courseID string) error {
 	now := time.Now()
 	e.ProgressPercent = percent
 	e.LastAccessedAt = &now
-	if percent >= 100 && e.CompletedAt == nil {
-		e.Status = "completed"
-		e.CompletedAt = &now
+
+	if percent >= 100 {
+		// ถ้ายังไม่เคย completed/passed/failed → mark เป็น completed
+		if e.Status == "" ||
+			e.Status == models.StatusEnrolled ||
+			e.Status == models.StatusInProgress {
+			e.Status = models.StatusCompleted
+		}
+		if e.CompletedAt == nil {
+			e.CompletedAt = &now
+		}
+
+		// call metrics service if available (guard against nil)
+		if s.metrics != nil {
+			// ให้เวลาเป็น 0 ถ้าไม่มีการเก็บเวลาจริง; ถ้าต้องการ คำนวณจาก lesson progress timestamps
+			var totalSec int64 = 0
+			_ = s.metrics.OnCourseCompleted(userID, courseID, totalSec)
+		}
 	}
+
 	return s.repo.UpsertEnrollment(e)
 }

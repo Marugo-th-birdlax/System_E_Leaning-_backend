@@ -64,3 +64,11 @@ func (r *AssetRepo) GetByID(id string) (*models.Asset, error) {
 	}
 	return &a, nil
 }
+
+func (r *LessonRepo) UpdateLesson(l *models.Lesson) error {
+	return r.db.Save(l).Error
+}
+
+func (r *LessonRepo) DeleteLesson(id string) error {
+	return r.db.Delete(&models.Lesson{}, "id = ?", id).Error
+}

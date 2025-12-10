@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
+	"strconv"
 	"time"
 
 	auth "github.com/Marugo/birdlax/internal/modules/auth"
@@ -29,8 +30,8 @@ func (s *svc) Login(ctx context.Context, employeeCode, pw string) (string, strin
 	if !password.Verify(u.PasswordHash, pw) {
 		return "", "", errors.New("invalid credentials")
 	}
-	accessTTL := parseDuration(os.Getenv("JWT_ACCESS_TTL"), 15*time.Minute)
-	refreshTTL := parseDuration(os.Getenv("JWT_REFRESH_TTL"), 7*24*time.Hour)
+	accessTTL := parseDuration(os.Getenv("JWT_ACCESS_TTL_MIN"), 60*time.Minute)
+	refreshTTL := parseDuration(os.Getenv("JWT_REFRESH_TTL_H"), 7*24*time.Hour)
 
 	access, err := security.SignAccess(u.ID, string(u.Role), u.EmployeeCode, accessTTL)
 	if err != nil {
@@ -67,8 +68,8 @@ func (s *svc) Refresh(ctx context.Context, refreshToken string) (string, string,
 
 	_ = s.tokens.Revoke(ctx, c.JTI) // rotate
 
-	accessTTL := parseDuration(os.Getenv("JWT_ACCESS_TTL"), 15*time.Minute)
-	refreshTTL := parseDuration(os.Getenv("JWT_REFRESH_TTL"), 7*24*time.Hour)
+	accessTTL := parseDuration(os.Getenv("JWT_ACCESS_TTL_MIN"), 60*time.Minute)
+	refreshTTL := parseDuration(os.Getenv("JWT_REFRESH_TTL_H"), 7*24*time.Hour)
 
 	access, err := security.SignAccess(u.ID, string(u.Role), u.EmployeeCode, accessTTL)
 	if err != nil {
@@ -101,4 +102,22 @@ func parseDuration(s string, def time.Duration) time.Duration {
 		return def
 	}
 	return d
+}
+
+func accessTTL() time.Duration {
+	if v := os.Getenv("JWT_ACCESS_TTL_MIN"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Minute
+		}
+	}
+	return 60 * time.Minute // default
+}
+
+func refreshTTL() time.Duration {
+	if v := os.Getenv("JWT_REFRESH_TTL_H"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Hour
+		}
+	}
+	return 7 * 24 * time.Hour // default
 }

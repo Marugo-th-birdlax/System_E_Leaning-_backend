@@ -9,6 +9,7 @@ type Course struct {
 	Description      *string
 	IsActive         bool `gorm:"not null;default:1"`
 	EstimatedMinutes *int
+	CategoryID       *string `gorm:"type:char(36)" json:"category_id"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	DeletedAt        *time.Time `gorm:"index"`

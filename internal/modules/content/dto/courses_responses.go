@@ -1,12 +1,18 @@
 package dto
 
+import "github.com/Marugo/birdlax/internal/modules/content/models"
+
 type CourseResp struct {
-	ID               string  `json:"id"`
-	Code             string  `json:"code"`
-	Title            string  `json:"title"`
-	Description      *string `json:"description,omitempty"`
-	IsActive         bool    `json:"is_active"`
-	EstimatedMinutes *int    `json:"estimated_minutes,omitempty"`
+	ID               string   `json:"id"`
+	Code             string   `json:"code"`
+	Title            string   `json:"title"`
+	Description      *string  `json:"description,omitempty"`
+	IsActive         bool     `json:"is_active"`
+	EstimatedMinutes *int     `json:"estimated_minutes,omitempty"`
+	CategoryID       *string  `json:"category_id"`
+	DepartmentIDs    []string `json:"department_ids,omitempty"`
+	CreatedAt        string   `json:"CreatedAt"`
+	UpdatedAt        string   `json:"UpdatedAt"`
 }
 
 type ModuleResp struct {
@@ -27,4 +33,22 @@ type PageMeta struct {
 type PagedCourses struct {
 	Data []CourseResp `json:"data"`
 	Meta PageMeta     `json:"meta"`
+}
+
+func FromCourseModel(c *models.Course, deptIDs []string) *CourseResp {
+	if c == nil {
+		return nil
+	}
+	return &CourseResp{
+		ID:               c.ID,
+		Code:             c.Code,
+		Title:            c.Title,
+		Description:      c.Description,
+		IsActive:         c.IsActive,
+		EstimatedMinutes: c.EstimatedMinutes,
+		CategoryID:       c.CategoryID,
+		DepartmentIDs:    deptIDs,
+		CreatedAt:        c.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:        c.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
 }

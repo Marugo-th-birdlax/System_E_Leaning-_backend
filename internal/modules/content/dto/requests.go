@@ -18,3 +18,17 @@ type UploadVideoResp struct {
 	SizeBytes int64  `json:"size_bytes"`
 	Storage   string `json:"storage"`
 }
+
+type UpdateLessonReq struct {
+	Title        *string `json:"title"`
+	ContentType  *string `json:"content_type"`
+	Seq          *int    `json:"seq"`
+	AssetID      *string `json:"asset_id"`
+	AssessmentID *string `json:"assessment_id"`
+	DurationS    *int64  `json:"duration_s"`
+	IsMandatory  *bool   `json:"is_mandatory"`
+}
+
+type DeleteLessonResp struct {
+	ID string `json:"id"`
+}

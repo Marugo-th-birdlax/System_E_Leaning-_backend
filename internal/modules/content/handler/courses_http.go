@@ -20,24 +20,46 @@ func (h *CourseHandler) CreateCourse(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
+
 	course, err := h.svc.CreateCourse(req)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	return c.Status(fiber.StatusCreated).JSON(course)
+
+	// 🔥 ดึง department_ids เพิ่ม
+	deptIDs, err := h.svc.ListCourseDepartments(course.ID)
+	if err != nil {
+		// ถ้าอยากจะ ignore error ก็ได้ แต่เอาแบบตรงไปตรงมา
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+	}
+
+	resp := dto.FromCourseModel(course, deptIDs)
+	return c.Status(fiber.StatusCreated).JSON(resp)
 }
+
 func (h *CourseHandler) UpdateCourse(c *fiber.Ctx) error {
 	id := c.Params("id")
+
 	var req dto.UpdateCourseReq
 	if err := c.BodyParser(&req); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 	}
+
 	course, err := h.svc.UpdateCourse(id, req)
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	return c.JSON(course)
+
+	// 🔥 หลังอัปเดตแล้ว ดึง department_ids ปัจจุบัน
+	deptIDs, err := h.svc.ListCourseDepartments(course.ID)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+	}
+
+	resp := dto.FromCourseModel(course, deptIDs)
+	return c.JSON(resp)
 }
+
 func (h *CourseHandler) DeleteCourse(c *fiber.Ctx) error {
 	if err := h.svc.DeleteCourse(c.Params("id")); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
@@ -45,11 +67,22 @@ func (h *CourseHandler) DeleteCourse(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 func (h *CourseHandler) GetCourse(c *fiber.Ctx) error {
-	course, err := h.svc.GetCourse(c.Params("id"))
+	id := c.Params("id")
+
+	course, err := h.svc.GetCourse(id)
 	if err != nil {
 		return fiber.NewError(fiber.StatusNotFound, "course not found")
 	}
-	return c.JSON(course)
+
+	// 🔥 ดึง department_ids เพิ่มจาก service
+	deptIDs, err := h.svc.ListCourseDepartments(id)
+	if err != nil {
+		// จะ ignore error ก็ได้ แต่เอาแบบตรง ๆ ไว้ก่อน
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+	}
+
+	resp := dto.FromCourseModel(course, deptIDs)
+	return c.JSON(resp)
 }
 func (h *CourseHandler) ListCourses(c *fiber.Ctx) error {
 	q := c.Query("q", "")
@@ -64,6 +97,7 @@ func (h *CourseHandler) ListCourses(c *fiber.Ctx) error {
 		out = append(out, dto.CourseResp{
 			ID: x.ID, Code: x.Code, Title: x.Title, Description: x.Description,
 			IsActive: x.IsActive, EstimatedMinutes: x.EstimatedMinutes,
+			CategoryID: x.CategoryID,
 		})
 	}
 	return c.JSON(dto.PagedCourses{

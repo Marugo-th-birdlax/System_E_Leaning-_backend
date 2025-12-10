@@ -2,12 +2,20 @@ package models
 
 import "time"
 
-// Enrollment ระดับคอร์ส
+const (
+	StatusEnrolled   = "enrolled"
+	StatusInProgress = "in_progress"
+	StatusCompleted  = "completed"
+	StatusPassed     = "passed"
+	StatusFailed     = "failed"
+	StatusDropped    = "dropped"
+)
+
 type Enrollment struct {
 	ID              string     `gorm:"type:char(36);primaryKey"`
 	UserID          string     `gorm:"type:char(36);index;not null"`
 	CourseID        string     `gorm:"type:char(36);index;not null"`
-	Status          string     `gorm:"type:enum('enrolled','in_progress','completed','dropped');default:'enrolled'"`
+	Status          string     `gorm:"type:enum('enrolled','in_progress','completed','passed','failed','dropped');default:'enrolled'"`
 	StartedAt       *time.Time `gorm:""`
 	CompletedAt     *time.Time `gorm:""`
 	LastAccessedAt  *time.Time `gorm:""`

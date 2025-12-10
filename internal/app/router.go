@@ -86,4 +86,8 @@ func Register(app *fiber.App) {
 	learninghandler.Register(protected, deps.LearningHTTP)
 	contenthandler.RegisterCourseRoutes(protected, deps.CourseHTTP)
 	assesshandler.RegisterAttemptRoutes(protected, deps.AttemptHTTP)
+	contenthandler.RegisterCategoryRoutes(api, deps.CategoryHTTP)
+	learninghandler.MyRegister(protected, deps.LearningHTTP, deps.MyHandler)
+	learninghandler.RegisterAdminRoutes(protected, deps.AnalyticsHandler)
+
 }

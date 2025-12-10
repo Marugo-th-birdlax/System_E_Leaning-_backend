@@ -16,6 +16,8 @@ type LessonRepo interface {
 	CreateLesson(l *models.Lesson) error
 	GetByID(id string) (*models.Lesson, error)
 	List(moduleID string, page, per int) ([]models.Lesson, int64, error)
+	UpdateLesson(l *models.Lesson) error
+	DeleteLesson(id string) error
 }
 
 type StorageUploader interface {
@@ -28,4 +30,7 @@ type Service interface {
 	ListLessons(moduleID string, page, per int) ([]models.Lesson, int64, error)
 	GetLesson(id string) (*models.Lesson, error)
 	GetAsset(id string) (*models.Asset, error)
+
+	UpdateLesson(id string, req dto.UpdateLessonReq) (*models.Lesson, error)
+	DeleteLesson(id string) error
 }

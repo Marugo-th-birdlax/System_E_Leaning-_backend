@@ -72,3 +72,35 @@ func (h *Handler) GetAsset(c *fiber.Ctx) error {
 	}
 	return c.JSON(a)
 }
+
+// PUT /v1/lessons/:id
+func (h *Handler) UpdateLesson(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "missing id")
+	}
+
+	var req dto.UpdateLessonReq
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+	}
+
+	l, err := h.svc.UpdateLesson(id, req)
+	if err != nil {
+		// ถ้าอยากแยก not found ชัด ๆ ค่อยไปเช็ก gorm.ErrRecordNotFound ใน service/repo
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	return c.JSON(l)
+}
+
+// DELETE /v1/lessons/:id
+func (h *Handler) DeleteLesson(c *fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "missing id")
+	}
+	if err := h.svc.DeleteLesson(id); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}

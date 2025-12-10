@@ -14,7 +14,14 @@ type CourseRepo interface {
 	Delete(id string) error
 	GetByID(id string) (*models.Course, error)
 	List(q string, page, per int) ([]models.Course, int64, error)
+	ListByCategory(categoryID, q string, page, per int) ([]models.Course, int64, error)
 }
+
+type CourseDeptRepo interface {
+	ReplaceTargets(courseID string, deptIDs []string) error
+	ListDepartmentIDs(courseID string) ([]string, error)
+}
+
 type ModuleRepo interface {
 	Create(*models.CourseModule) error
 	Update(*models.CourseModule) error
@@ -34,6 +41,8 @@ type CourseService interface {
 	GetCourse(id string) (*models.Course, error)
 	ListCourses(q string, page, per int) ([]models.Course, int64, error)
 
+	ListCourseDepartments(courseID string) ([]string, error)
+
 	CreateModule(courseID string, req dto.CreateModuleReq) (*models.CourseModule, error)
 	UpdateModule(id string, req dto.UpdateModuleReq) (*models.CourseModule, error)
 	DeleteModule(id string) error
@@ -45,17 +54,35 @@ type courseSvc struct {
 	courseRepo CourseRepo
 	moduleRepo ModuleRepo
 	lessonList LessonLister
+	catRepo    CategoryRepo
+	deptRepo   CourseDeptRepo
 }
 
-func NewCourseService(cr CourseRepo, mr ModuleRepo, ll LessonLister) CourseService {
-	return &courseSvc{courseRepo: cr, moduleRepo: mr, lessonList: ll}
+func NewCourseService(cr CourseRepo, mr ModuleRepo, ll LessonLister, cats CategoryRepo, dr CourseDeptRepo) CourseService {
+	return &courseSvc{courseRepo: cr, moduleRepo: mr, lessonList: ll, catRepo: cats, deptRepo: dr}
 }
 
+/******** Courses ********/
 /******** Courses ********/
 func (s *courseSvc) CreateCourse(req dto.CreateCourseReq) (*models.Course, error) {
 	if req.Code == "" || req.Title == "" {
 		return nil, errors.New("code and title required")
 	}
+
+	// ✅ validate category_id ถ้ามี
+	if req.CategoryID != nil && *req.CategoryID != "" {
+		if s.catRepo == nil {
+			return nil, errors.New("category repo not wired")
+		}
+		ok, err := s.catRepo.Exists(*req.CategoryID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, errors.New("invalid category_id")
+		}
+	}
+
 	c := &models.Course{
 		ID:               uuid.NewString(),
 		Code:             req.Code,
@@ -63,12 +90,27 @@ func (s *courseSvc) CreateCourse(req dto.CreateCourseReq) (*models.Course, error
 		Description:      req.Description,
 		IsActive:         true,
 		EstimatedMinutes: req.EstimatedMinutes,
+		CategoryID:       req.CategoryID,
 	}
 	if req.IsActive != nil {
 		c.IsActive = *req.IsActive
 	}
-	return c, s.courseRepo.Create(c)
+
+	// ⛳ 1) เซฟตัว course ก่อน
+	if err := s.courseRepo.Create(c); err != nil {
+		return nil, err
+	}
+
+	// ⛳ 2) ผูก department targets ถ้ามีส่งมา และมี repo
+	if s.deptRepo != nil && len(req.DepartmentIDs) > 0 {
+		if err := s.deptRepo.ReplaceTargets(c.ID, req.DepartmentIDs); err != nil {
+			return nil, err
+		}
+	}
+
+	return c, nil
 }
+
 func (s *courseSvc) UpdateCourse(id string, req dto.UpdateCourseReq) (*models.Course, error) {
 	c, err := s.courseRepo.GetByID(id)
 	if err != nil {
@@ -86,12 +128,53 @@ func (s *courseSvc) UpdateCourse(id string, req dto.UpdateCourseReq) (*models.Co
 	if req.EstimatedMinutes != nil {
 		c.EstimatedMinutes = req.EstimatedMinutes
 	}
-	return c, s.courseRepo.Update(c)
+	if req.CategoryID != nil {
+		if *req.CategoryID == "" {
+			c.CategoryID = nil // เคลียร์หมวด
+		} else {
+			if s.catRepo == nil {
+				return nil, errors.New("category repo not wired")
+			}
+			ok, err := s.catRepo.Exists(*req.CategoryID)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return nil, errors.New("invalid category_id")
+			}
+			c.CategoryID = req.CategoryID
+		}
+	}
+
+	// ⛳ 1) อัปเดต course ก่อน
+	if err := s.courseRepo.Update(c); err != nil {
+		return nil, err
+	}
+
+	// ⛳ 2) ถ้า client ส่ง department_ids มา → แทนที่ mapping ทั้งชุด
+	// ใช้ pointer (*[]string) เพื่อแยกกรณี:
+	//   - nil  = ไม่แตะเรื่อง department
+	//   - []{} = เคลียร์ทุก department
+	if s.deptRepo != nil && req.DepartmentIDs != nil {
+		if err := s.deptRepo.ReplaceTargets(c.ID, *req.DepartmentIDs); err != nil {
+			return nil, err
+		}
+	}
+
+	return c, nil
 }
+
 func (s *courseSvc) DeleteCourse(id string) error                { return s.courseRepo.Delete(id) }
 func (s *courseSvc) GetCourse(id string) (*models.Course, error) { return s.courseRepo.GetByID(id) }
 func (s *courseSvc) ListCourses(q string, page, per int) ([]models.Course, int64, error) {
 	return s.courseRepo.List(q, page, per)
+}
+
+func (s *courseSvc) ListCourseDepartments(courseID string) ([]string, error) {
+	if s.deptRepo == nil {
+		return []string{}, nil
+	}
+	return s.deptRepo.ListDepartmentIDs(courseID)
 }
 
 /******** Modules ********/

@@ -1,6 +1,8 @@
 package handler
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"github.com/gofiber/fiber/v2"
+)
 
 func Register(r fiber.Router, h *Handler) {
 	g := r.Group("/assessments")
